@@ -1,4 +1,4 @@
--module(js_instance).
+-module(script_instance).
 
 -behaviour(gen_server).
 
@@ -11,8 +11,8 @@
 
 %%---------------------------------------------------------------------------
 
-start_link(ScriptName) ->
-    gen_server:start_link(?MODULE, [ScriptName], []).
+start_link(CommandLine) ->
+    gen_server:start_link(?MODULE, [CommandLine], []).
 
 call(Pid, M, F, A) ->
     gen_server:call(Pid, {call, M, F, A}).
@@ -29,8 +29,8 @@ send_obj(Id, Op, Payload, #state{port = Port}) ->
                  [rfc4627:encode({obj, [{id, Id}, {op, Op}, {payload, Payload}]}), "\n"]),
     ok.
 
-bad_js_message(Message, State) ->
-    {stop, {bad_js_message, Message}, State}.
+bad_script_message(Message, State) ->
+    {stop, {bad_script_message, Message}, State}.
 
 handle_msg(Message, State = #state{requests = OldReq}) ->
     Id = rfc4627:get_field(Message, "id", null),
@@ -40,7 +40,7 @@ handle_msg(Message, State = #state{requests = OldReq}) ->
         <<"reply">> ->
             case dict:find(Id, OldReq) of
                 error ->
-                    bad_js_message(Message, State);
+                    bad_script_message(Message, State);
                 {ok, From} ->
                     gen_server:reply(From, {ok, Payload}),
                     {noreply, State#state{requests = dict:erase(Id, OldReq)}}
@@ -50,15 +50,15 @@ handle_msg(Message, State = #state{requests = OldReq}) ->
             apply(list_to_atom(binary_to_list(MBin)), list_to_atom(binary_to_list(FBin)), A),
             {noreply, State};
         _Other ->
-            bad_js_message(Message, State)
+            bad_script_message(Message, State)
     end.
 
 %%---------------------------------------------------------------------------
 
-init([ScriptName]) ->
-    ScriptDir = js_instance_manager:script_dir(),
-    error_logger:info_report({starting_js, ScriptDir, ScriptName}),
-    Port = open_port({spawn, "js " ++ ScriptName},
+init([CommandLine]) ->
+    ScriptDir = script_instance_manager:script_dir(),
+    error_logger:info_report({starting_script, ScriptDir, CommandLine}),
+    Port = open_port({spawn, CommandLine},
                      [{line, 1024}, {cd, ScriptDir}, use_stdio, eof]),
     {ok, #state{port = Port,
                 fragments_rev = [],

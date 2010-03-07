@@ -1,25 +1,19 @@
--module(js_instance_manager).
+-module(script_instance_manager).
 
 -behaviour(gen_server).
 
--export([start_link/0]).
+-export([start_link/3]).
 -export([script_dir/0]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--export([call/3, cast/3]).
-
--define(SERVER, ?MODULE).
-
--rabbit_boot_step({?MODULE,
-                   [{mfa, {rabbit_sup, start_child, [?MODULE]}},
-                    {enables, rabbit_exchange_type_js}]}).
+-export([call/4]).
 
 %%---------------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(ServerName, CommandLine, MaxInstanceCount) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [CommandLine, MaxInstanceCount], []).
 
 script_dir() ->
     %% Lifted from rabbit_mochiweb:static_context_handler/3. Why
@@ -29,27 +23,24 @@ script_dir() ->
     LocalPath = filename:join(ModuleRoot, "priv"),
     LocalPath.
 
-call(M, F, A) ->
-    gen_server:call(?SERVER, {call, M, F, A}).
-
-cast(M, F, A) ->
-    gen_server:cast(?SERVER, {cast, M, F, A}).
+call(Pid, M, F, A) ->
+    gen_server:call(Pid, {call, M, F, A}).
 
 %%---------------------------------------------------------------------------
 
--record(state, {script_name, max_instance_count, current_instance_count, free_instances, waiters}).
+-record(state, {command_line, max_instance_count, current_instance_count, free_instances, waiters}).
 
 call_and_release(InstancePid, {M, F, A, From}) ->
     Manager = self(),
     spawn(fun () ->
                   link(InstancePid),
-                  Reply = js_instance:call(InstancePid, M, F, A),
+                  Reply = script_instance:call(InstancePid, M, F, A),
                   gen_server:reply(From, Reply),
                   Manager ! {instance_idle, InstancePid}
           end),
     ok.
 
-maybe_proceed(State = #state{script_name = ScriptName,
+maybe_proceed(State = #state{command_line = CommandLine,
                              free_instances = OldFree,
                              waiters = OldWaiters,
                              current_instance_count = OldCurrent,
@@ -64,7 +55,7 @@ maybe_proceed(State = #state{script_name = ScriptName,
                 {empty, _} ->
                     if
                         OldCurrent < Max ->
-                            {ok, NewPid} = js_instance:start_link(ScriptName),
+                            {ok, NewPid} = script_instance:start_link(CommandLine),
                             ok = call_and_release(NewPid, Waiter),
                             State#state{current_instance_count = OldCurrent + 1,
                                         waiters = NewWaiters};
@@ -78,11 +69,9 @@ maybe_proceed(State = #state{script_name = ScriptName,
 
 %%---------------------------------------------------------------------------
 
-init([]) ->
+init([CommandLine, MaxInstanceCount]) ->
     process_flag(trap_exit, true),
-    {ok, MaxInstanceCount} = application:get_env(rabbit_js_exchange, max_instance_count),
-    {ok, ScriptName} = application:get_env(rabbit_js_exchange, script_name),
-    {ok, #state{script_name = ScriptName,
+    {ok, #state{command_line = CommandLine,
                 max_instance_count = MaxInstanceCount,
                 current_instance_count = 0,
                 free_instances = queue:new(),

@@ -1,4 +1,4 @@
-PACKAGE=rabbit_js_exchange
+PACKAGE=rabbit_script_exchange
 DEPS=rabbitmq-server rabbitmq-erlang-client erlang-rfc4627
 EXTRA_PACKAGE_DIRS=priv
 

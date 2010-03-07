@@ -1,9 +1,9 @@
--module(rabbit_exchange_type_js).
+-module(script_exchange).
 -include_lib("rfc4627_jsonrpc/include/rfc4627.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("rabbit_common/include/rabbit_framing.hrl").
 
--define(EXCHANGE_TYPE_BIN, <<"x-js">>).
+-define(EXCHANGE_TYPE_BIN, <<"x-script">>).
 
 -rabbit_boot_step({?MODULE,
                    [{mfa, {rabbit_exchange_type_registry, register, [?EXCHANGE_TYPE_BIN, ?MODULE]}},
@@ -47,7 +47,7 @@ do_routing_action(#exchange{name = Name}, Delivery, [<<"direct">>, RK]) ->
 do_routing_action(Exchange, Delivery, [<<"topic">>, RK]) ->
     rabbit_exchange_type_topic:publish(Exchange, update_delivery_rk(Delivery, RK));
 do_routing_action(Exchange, _Delivery, Action) ->
-    error_logger:error_report({bad_js_exchange_routing_action, Exchange, Action}),
+    error_logger:error_report({bad_script_exchange_routing_action, Exchange, Action}),
     {unroutable, []}.
 
 merge_pieces([]) ->
@@ -68,6 +68,11 @@ choose_result(routed, _) -> routed;
 choose_result(_, routed) -> routed;
 choose_result(V, _) -> V.
 
+script_manager_pid(#exchange{arguments = Args}) ->
+    {value, {_, _, MimeTypeBin}} = lists:keysearch(<<"type">>, 1, Args),
+    {ok, Pid} = script_manager_sup:lookup(MimeTypeBin),
+    Pid.
+
 publish(Exchange = #exchange{name = Name},
         Delivery = #delivery{message = Message0 = #basic_message{
                                routing_key = RK,
@@ -77,30 +82,32 @@ publish(Exchange = #exchange{name = Name},
          properties = Properties,
          payload_fragments_rev = PayloadRev
         } = rabbit_binary_parser:ensure_content_decoded(Content0),
-    case js_instance_manager:call(<<"Exchange">>, <<"publish">>,
-                                  [name_to_js(Name),
-                                   RK,
-                                   ?RFC4627_FROM_RECORD('P_basic', Properties),
-                                   list_to_binary(lists:reverse(PayloadRev))]) of
+    case script_instance_manager:call(
+           script_manager_pid(Exchange), <<"Exchange">>, <<"publish">>,
+           [name_to_js(Name),
+            RK,
+            ?RFC4627_FROM_RECORD('P_basic', Properties),
+            list_to_binary(lists:reverse(PayloadRev))]) of
         {ok, [NewProps, NewBody, Actions]} ->
             NewContent = js_to_content(Content0, NewProps, NewBody),
             NewDelivery = Delivery#delivery{message = Message0#basic_message{content = NewContent}},
             merge_pieces([do_routing_action(Exchange, NewDelivery, Action)
                           || Action <- Actions]);
         Other ->
-            error_logger:error_report({bad_reply_from_js_exchange_publish, Other}),
+            error_logger:error_report({bad_reply_from_script_exchange_publish, Other}),
             %% TODO FIXME do something more sensible here
             []
     end.
 
-validate_or_create(MethodName, #exchange{name = Name, arguments = Args}) ->
-    js_instance_manager:call(<<"Exchange">>, MethodName,
-                             [name_to_js(Name),
-                              table_to_js(Args)]),
+validate(X = #exchange{name = Name, arguments = Args}) ->
+    {ok, true} = script_instance_manager:call(script_manager_pid(X), <<"Exchange">>, <<"validate">>,
+                                              [name_to_js(Name), table_to_js(Args)]),
     ok.
 
-validate(X) -> validate_or_create(<<"validate">>, X).
-create(X) -> validate_or_create(<<"create">>, X).
+create(X = #exchange{name = Name, arguments = Args}) ->
+    {ok, _} = script_instance_manager:call(script_manager_pid(X), <<"Exchange">>, <<"create">>,
+                                           [name_to_js(Name), table_to_js(Args)]),
+    ok.
 
 recover(X, _Bs) ->
     create(X).
