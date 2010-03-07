@@ -19,7 +19,7 @@ print ch.exchange_declare(exchange='x-script', type='x-script', arguments={
     "type": "text/javascript",
     "definition": r"""
     var counter = 0;
-    function (msg) {
+    return function (msg) {
       msg.fanout();
       msg.direct("hi");
       msg.topic("x.y." + msg.routing_key);

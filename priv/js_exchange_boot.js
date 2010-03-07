@@ -86,7 +86,7 @@ Modules.Exchange = {
     },
 
     create: function (xname, args) {
-	this.handlers[xname.join(',')] = eval(args.definition);
+	this.handlers[xname.join(',')] = eval("(function () { " + args.definition + "})()");
     },
 
     publish: function (xname, rk, props, body) {
