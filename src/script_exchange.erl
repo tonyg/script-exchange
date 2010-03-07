@@ -52,7 +52,7 @@ do_routing_action(Exchange, _Delivery, Action) ->
 
 merge_pieces([]) ->
     %% TODO FIXME by exposing check_delivery or similar from rabbit_router
-    {routed, []};
+    {unroutable, []};
 merge_pieces([{Result, Pids} | Pieces]) ->
     merge_pieces({Result, lists:usort(Pids)}, Pieces).
 
