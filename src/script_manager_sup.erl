@@ -27,6 +27,9 @@ init([]) ->
     {ok, MaxInstanceCount} = application:get_env(rabbit_script_exchange, max_instance_count),
     {ok, LanguageDefs} = application:get_env(rabbit_script_exchange, languages),
 
+    error_logger:info_msg("script_exchange supported_languages: ~p~n",
+                          [[binary_to_list(MT) || {MT, _} <- LanguageDefs]]),
+
     {ok, {{one_for_one, 10, 10},
           [begin
                {value, {_, CommandLine}} = lists:keysearch(command_line, 1, Attributes),

@@ -6,7 +6,11 @@
              script_instance_manager,
 	     script_manager_sup]},
   {registered, []},
-  {env, [{languages, [{<<"text/javascript">>, [{command_line, "js js_exchange_boot.js"}]},
-                      {<<"text/x-python">>, [{command_line, "python py_exchange_boot.py"}]}]},
+  {env, [{languages, [
+                      %% Commented out because of securability problems:
+                      %% {<<"text/x-python">>, [{command_line, "python py_exchange_boot.py"}]},
+
+                      {<<"text/javascript">>, [{command_line, "js js_exchange_boot.js"}]}
+                     ]},
          {max_instance_count, 3}]},
   {applications, [kernel, stdlib, rabbit, mnesia]}]}.

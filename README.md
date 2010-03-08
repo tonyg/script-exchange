@@ -24,6 +24,29 @@ scripts, implementing exchanges such as an "XPath exchange" becomes
 possible, where bindings contain XPath expressions for selecting
 messages.
 
+## IMPORTANT: Security
+
+The virtual machines for each supported scripting language run as the
+same user that runs the RabbitMQ server, meaning that unless extra
+steps are taken, scripts uploaded by AMQP **clients** can run code as
+the AMQP **server user** on the server's operating system.
+
+For this reason, *do not enable this plugin until you have fully
+analyzed the security consequences of doing so*. You may compromise a
+large chunk of your network.
+
+By default, the plugin is configured with only the Spidermonkey
+Javascript interpreter enabled. Spidermonkey is a reasonably tightly
+sandboxed environment for client-supplied programs to run in. While
+Python is also supported, the difficulty of securing the Python
+virtual machine makes it unwise to enable Python support in anything
+other than the most tightly locked-down environments.
+
+One approach to securing script interpreters for the plugin is to use
+[Jailkit](http://olivier.sessink.nl/jailkit/) (or similar) to set up
+`chroot` jails for them. Jailkit runs on Linux, Solaris and various
+BSDs including Mac OS X.
+
 ## Declaring `x-script` exchanges
 
 Use AMQP's `Exchange.Declare` operation as usual, with type `x-script`
@@ -112,6 +135,9 @@ Make sure to get the indentation right in the `definition` argument to
 The `msg` argument to `handler` is a message object, very similar to
 that given to a Javascript function, with identically-named fields and
 methods. See the Javascript section for details.
+
+Note that the plugin ships with Python support disabled, for the
+reasons given above in the section on security.
 
 ## Managing state in scripts
 
