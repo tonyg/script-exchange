@@ -47,6 +47,10 @@ One approach to securing script interpreters for the plugin is to use
 `chroot` jails for them. Jailkit runs on Linux, Solaris and various
 BSDs including Mac OS X.
 
+Another approach is to cryptographically sign uploaded scripts, and
+only accept them if the signature validates and is made by some member
+of a trusted set of keys. gpg or OpenSSL could be useful here.
+
 ## Declaring `x-script` exchanges
 
 Use AMQP's `Exchange.Declare` operation as usual, with type `x-script`
