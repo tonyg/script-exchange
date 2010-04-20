@@ -92,14 +92,12 @@ class Exchange:
     def __init__(self):
         self.handlers = {}
 
-    def validate(self, xname, args):
-        if not 'definition' in args:
-            return False
+    def validate(self, xname, definition):
         return True
 
-    def create(self, xname, args):
+    def create(self, xname, definition):
         vars = {}
-        exec args['definition'] in globals(), vars
+        exec definition in globals(), vars
         self.handlers[','.join(xname)] = vars['handler']
 
     def publish(self, xname, rk, props, body):

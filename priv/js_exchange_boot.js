@@ -100,15 +100,15 @@ Modules.Exchange = {
 	this.routing_actions = [];
     },
 
-    validate: function (xname, args) {
-	if (!args.definition) {
+    validate: function (xname, definition) {
+	if (!definition) {
 	    return false;
 	}
 	return true;
     },
 
-    create: function (xname, args) {
-	this.handlers[xname.join(',')] = eval("(function () { " + args.definition + "})()");
+    create: function (xname, definition) {
+	this.handlers[xname.join(',')] = eval("(function () { " + definition + "})()");
     },
 
     publish: function (xname, rk, props, body) {

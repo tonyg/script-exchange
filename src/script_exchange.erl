@@ -31,24 +31,55 @@
                     {requires, rabbit_exchange_type_registry},
                     {enables, exchange_recovery}]}).
 
+-rabbit_boot_step({script_exchange_key_check,
+                   [{mfa, {?MODULE, check_permitted_keys, []}},
+                    {requires, ?MODULE}]}).
+
 -behaviour(rabbit_exchange_type).
 
 -export([description/0, publish/2]).
 -export([validate/1, create/1, recover/2, delete/2, add_binding/2, remove_bindings/2]).
 
+-export([check_permitted_keys/0]).
+
 description() ->
     [{description, <<"Experimental Javascript exchange">>}].
+
+check_permitted_keys() ->
+    PermittedKeyIds = permitted_key_ids(),
+    if
+        PermittedKeyIds == [] ->
+            exit({?MODULE, no_permitted_key_ids_configured});
+        true ->
+            ok
+    end,
+    case lists:filter(
+           fun (PermittedKeyId) ->
+                   Output = os:cmd("gpg --list-keys --with-colons " ++ PermittedKeyId),
+                   case [L || "pub:" ++ L <- string:tokens(Output, "\n")] of
+                       [] -> true;
+                       [_, _ | _] -> true;
+                       [_Line] -> false
+                   end
+           end, permitted_key_ids()) of
+        [] ->
+            error_logger:info_msg("script_exchange permitted_key_ids: ~p~n", [PermittedKeyIds]),
+            ok;
+        ProblemKeys ->
+            %% Either they're unknown, or multiply-defined (!)
+            exit({?MODULE, problematic_permitted_key_ids, ProblemKeys})
+    end.
 
 name_to_js(#resource{virtual_host = VHostBin, name = NameBin}) ->
     [VHostBin, NameBin].
 
-table_to_js(Table) ->
-    {obj, [table_field_to_js(Name, Type, Value) || {Name, Type, Value} <- Table]}.
-
-table_field_to_js(Name, table, Value) ->
-    {Name, table_to_js(Value)};
-table_field_to_js(Name, _Type, Value) ->
-    {Name, Value}.
+%% table_to_js(Table) ->
+%%     {obj, [table_field_to_js(Name, Type, Value) || {Name, Type, Value} <- Table]}.
+%%
+%% table_field_to_js(Name, table, Value) ->
+%%     {Name, table_to_js(Value)};
+%% table_field_to_js(Name, _Type, Value) ->
+%%     {Name, Value}.
 
 js_to_content(OldContent, NewProps, NewBody) ->
     OldContent#content{
@@ -89,10 +120,73 @@ choose_result(routed, _) -> routed;
 choose_result(_, routed) -> routed;
 choose_result(V, _) -> V.
 
+required_arg(Args, ArgNameBin, ArgTypeAtom) ->
+    case lists:keysearch(ArgNameBin, 1, Args) of
+        {value, {_, ArgTypeAtom, Value}} ->
+            Value;
+        {value, {_, _OtherTypeAtom, _}} ->
+            rabbit_misc:protocol_error(not_allowed,
+                                       "Required argument '~s' must be of type ~s",
+                                       [ArgNameBin, ArgTypeAtom]);
+        false ->
+            rabbit_misc:protocol_error(not_allowed,
+                                       "Required argument '~s' not present",
+                                       [ArgNameBin])
+    end.
+
 script_manager_pid(#exchange{arguments = Args}) ->
-    {value, {_, _, MimeTypeBin}} = lists:keysearch(<<"type">>, 1, Args),
+    MimeTypeBin = required_arg(Args, <<"type">>, longstr),
     {ok, Pid} = script_manager_sup:lookup(MimeTypeBin),
     Pid.
+
+with_temp_files(Contents, F) ->
+    Pairs = [{"/tmp/"
+              ++ atom_to_list(?MODULE) ++ "-"
+              ++ atom_to_list(node()) ++ "-"
+              ++ integer_to_list(erlang:phash2(make_ref()))
+              ++ ".bin", C} || C <- Contents],
+    [ok = file:write_file(N, C) || {N, C} <- Pairs],
+    Result = F([N || {N, _} <- Pairs]),
+    [ok = file:delete(N) || {N, _} <- Pairs],
+    Result.
+
+process_gpg_output(XName, PermittedKeyIds, FullOutput) ->
+    error_logger:info_msg("GPG verification output for ~s:~n~s~n",
+                          [rabbit_misc:rs(XName),
+                           FullOutput]),
+    case [L || "[GNUPG:] VALIDSIG " ++ L <- string:tokens(FullOutput, "\n")] of
+        [] ->
+            rabbit_misc:protocol_error(not_allowed,
+                                       "No valid signatures found",
+                                       []);
+        [Line] ->
+            [FullKeyId | _] = string:tokens(Line, " "),
+            case lists:any(fun (PermittedKeyId) ->
+                                   string:right(FullKeyId, length(PermittedKeyId))
+                                       == PermittedKeyId
+                           end, PermittedKeyIds) of
+                true ->
+                    ok;
+                false ->
+                    rabbit_misc:protocol_error(not_allowed,
+                                               "Valid signature found, but using unauthorised key",
+                                               [])
+            end
+    end.
+
+verify_signature(XName, ContentBin, DetachedSigBin, PermittedKeyIds) ->
+    with_temp_files([ContentBin, DetachedSigBin],
+                    fun ([ContentFilename, SigFilename]) ->
+                            process_gpg_output(XName,
+                                               PermittedKeyIds,
+                                               os:cmd("gpg --verify --status-fd 1 "
+                                                      ++ "\"" ++ SigFilename ++ "\" \""
+                                                      ++ ContentFilename ++ "\""))
+                    end).
+
+permitted_key_ids() ->
+    {ok, PermittedKeyIds} = application:get_env(rabbit_script_exchange, permitted_key_ids),
+    PermittedKeyIds.
 
 publish(Exchange = #exchange{name = Name},
         Delivery = #delivery{message = Message0 = #basic_message{
@@ -121,13 +215,17 @@ publish(Exchange = #exchange{name = Name},
     end.
 
 validate(X = #exchange{name = Name, arguments = Args}) ->
+    DefinitionBin = required_arg(Args, <<"definition">>, longstr),
+    DetachedSigBin = required_arg(Args, <<"signature">>, longstr),
+    ok = verify_signature(Name, DefinitionBin, DetachedSigBin, permitted_key_ids()),
     {ok, true} = script_instance_manager:call(script_manager_pid(X), <<"Exchange">>, <<"validate">>,
-                                              [name_to_js(Name), table_to_js(Args)]),
+                                              [name_to_js(Name), DefinitionBin]),
     ok.
 
 create(X = #exchange{name = Name, arguments = Args}) ->
+    DefinitionBin = required_arg(Args, <<"definition">>, longstr),
     {ok, _} = script_instance_manager:call(script_manager_pid(X), <<"Exchange">>, <<"create">>,
-                                           [name_to_js(Name), table_to_js(Args)]),
+                                           [name_to_js(Name), DefinitionBin]),
     ok.
 
 recover(X, _Bs) ->

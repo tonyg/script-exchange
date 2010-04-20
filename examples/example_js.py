@@ -20,11 +20,33 @@
 ## All Rights Reserved.
 ##
 ## Contributor(s): ______________________________________.
+from __future__ import with_statement
 
 import sys
 sys.path.append('../pika')
 import pika
 import asyncore
+import os
+
+signingkey = sys.argv[1]
+
+definition = r"""
+    var counter = 0;
+    return function (msg) {
+      msg.fanout();
+      msg.direct("hi");
+      msg.topic("x.y." + msg.routing_key);
+      msg.properties.user_id = "THISISTHEUSER";
+      msg.body = counter + "\n" + msg.body;
+      counter++;
+    }
+"""
+
+(po, pi) = os.popen2("gpg -u %s -a --detach-sign" % (signingkey,))
+po.write(definition)
+po.close()
+signature = pi.read()
+pi.close()
 
 conn = pika.AsyncoreConnection(pika.ConnectionParameters(
     '127.0.0.1',
@@ -39,17 +61,8 @@ ch = conn.channel()
 
 print ch.exchange_declare(exchange='x-script', type='x-script', arguments={
     "type": "text/javascript",
-    "definition": r"""
-    var counter = 0;
-    return function (msg) {
-      msg.fanout();
-      msg.direct("hi");
-      msg.topic("x.y." + msg.routing_key);
-      msg.properties.user_id = "THISISTHEUSER";
-      msg.body = counter + "\n" + msg.body;
-      counter++;
-    }
-    """
+    "definition": definition,
+    "signature": signature
     })
 
 print ch.queue_declare(queue='x-script-q', auto_delete=True)

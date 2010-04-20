@@ -7,10 +7,12 @@
 	     script_manager_sup]},
   {registered, []},
   {env, [{languages, [
-                      %% Commented out because of securability problems:
+                      %% Python is disabled by default because of securability problems.
+                      %% Please see the README.md file.
                       %% {<<"text/x-python">>, [{command_line, "python py_exchange_boot.py"}]},
 
                       {<<"text/javascript">>, [{command_line, "js js_exchange_boot.js"}]}
                      ]},
+         {permitted_key_ids, []},
          {max_instance_count, 3}]},
   {applications, [kernel, stdlib, rabbit, mnesia]}]}.
