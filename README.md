@@ -46,12 +46,13 @@ For this reason, *do not enable this plugin until you have fully
 analyzed the security consequences of doing so*. You may compromise a
 large chunk of your network.
 
-By default, the plugin is configured with only the Spidermonkey
-Javascript interpreter enabled. Spidermonkey is a reasonably tightly
-sandboxed environment for client-supplied programs to run in. While
-Python is also supported, the difficulty of securing the Python
-virtual machine makes it unwise to enable Python support in anything
-other than the most tightly locked-down environments.
+By default, the plugin is configured with only the
+Spidermonkey[^spiderversion] Javascript interpreter
+enabled. Spidermonkey is a reasonably tightly sandboxed environment
+for client-supplied programs to run in. While Python is also
+supported, the difficulty of securing the Python virtual machine makes
+it unwise to enable Python support in anything other than the most
+tightly locked-down environments.
 
 Besides the existing support for signing of uploaded scripts, another
 potential (but to date untried) approach to securing script
@@ -70,7 +71,9 @@ and the following three required arguments:
    MIME-types are supported:
 
      - `text/javascript`: Requires Spidermonkey to be installed. I've
-       been using version "1.8.0 pre-release 1 2007-10-03".
+       been using version "1.8.0 pre-release 1
+       2007-10-03".[^spiderversion]
+
      - `text/x-python`: Requires the default `python` interpreter to
        have a `simplejson` module installed. Python v2.6 and newer
        include `simplejson` by default.
@@ -361,3 +364,8 @@ This plugin is licensed under the MPL. The full license text is
 included with the source code for the package. If you have any
 questions regarding licensing, please contact us at
 <info@rabbitmq.com>.
+
+[^spiderversion]: **N.B.**: version 1.7.0 of spidermonkey lacks a
+significant `fflush()` call in its `print()` primitive which prevents
+it from working with the script exchange. Version 1.8.0rc1 seems to be
+fine, though.
