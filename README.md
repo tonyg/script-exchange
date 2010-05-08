@@ -46,8 +46,8 @@ For this reason, *do not enable this plugin until you have fully
 analyzed the security consequences of doing so*. You may compromise a
 large chunk of your network.
 
-By default, the plugin is configured with only the
-Spidermonkey[^spiderversion] Javascript interpreter
+By default, the plugin is configured with only the Spidermonkey
+(v1.8.0 or newer; see below) Javascript interpreter
 enabled. Spidermonkey is a reasonably tightly sandboxed environment
 for client-supplied programs to run in. While Python is also
 supported, the difficulty of securing the Python virtual machine makes
@@ -71,8 +71,9 @@ and the following three required arguments:
    MIME-types are supported:
 
      - `text/javascript`: Requires Spidermonkey to be installed. I've
-       been using version "1.8.0 pre-release 1
-       2007-10-03".[^spiderversion]
+       been using version "1.8.0 pre-release 1 2007-10-03". See below
+       for a note on the unsuitability of earlier releases of
+       Spidermonkey.
 
      - `text/x-python`: Requires the default `python` interpreter to
        have a `simplejson` module installed. Python v2.6 and newer
@@ -365,7 +366,8 @@ included with the source code for the package. If you have any
 questions regarding licensing, please contact us at
 <info@rabbitmq.com>.
 
-[^spiderversion]: **N.B.**: version 1.7.0 of spidermonkey lacks a
-significant `fflush()` call in its `print()` primitive which prevents
-it from working with the script exchange. Version 1.8.0rc1 seems to be
-fine, though.
+## Known Problems
+
+Version 1.7.0 of Spidermonkey lacks a significant `fflush()` call in
+its `print()` primitive which prevents it from working with the script
+exchange. Version 1.8.0rc1 seems to be fine, though.
