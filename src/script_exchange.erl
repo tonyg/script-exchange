@@ -241,9 +241,9 @@ add_binding(_X, _B) ->
 remove_bindings(_X, _Bs) ->
     ok.
 
-check_one_arg(#exchange{ name = Name, arguments = OrigArgs }, NewArgs, Name) ->
-    V1 = lists:keysearch(Name, 1, OrigArgs),
-    V2 = lists:keysearch(Name, 1, NewArgs),
+check_one_arg(#exchange{ name = XName, arguments = OrigArgs }, NewArgs, ArgName) ->
+    V1 = lists:keysearch(ArgName, 1, OrigArgs),
+    V2 = lists:keysearch(ArgName, 1, NewArgs),
     if
         V1 == V2 ->
             ok;
@@ -254,7 +254,7 @@ check_one_arg(#exchange{ name = Name, arguments = OrigArgs }, NewArgs, Name) ->
             %% instead?
             rabbit_misc:protocol_error(precondition_failed,
                                        "cannot redeclare ~s with inequivalent args",
-                                       [rabbit_misc:rs(Name)])
+                                       [rabbit_misc:rs(XName)])
     end.
 
 assert_args_equivalence(X, Args) ->
