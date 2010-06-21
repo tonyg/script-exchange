@@ -38,7 +38,8 @@
 -behaviour(rabbit_exchange_type).
 
 -export([description/0, publish/2]).
--export([validate/1, create/1, recover/2, delete/2, add_binding/2, remove_bindings/2]).
+-export([validate/1, create/1, recover/2, delete/2, add_binding/2, remove_bindings/2,
+         assert_args_equivalence/2]).
 
 -export([check_permitted_keys/0]).
 
@@ -239,3 +240,25 @@ add_binding(_X, _B) ->
 
 remove_bindings(_X, _Bs) ->
     ok.
+
+check_one_arg(#exchange{ name = Name, arguments = OrigArgs }, NewArgs, Name) ->
+    V1 = lists:keysearch(Name, 1, OrigArgs),
+    V2 = lists:keysearch(Name, 1, NewArgs),
+    if
+        V1 == V2 ->
+            ok;
+        true ->
+            %% This code is almost exactly repeated in every
+            %% assert_args_equivalence implementation. Shouldn't
+            %% assert_args_equivalence be changed to be a predicate
+            %% instead?
+            rabbit_misc:protocol_error(precondition_failed,
+                                       "cannot redeclare ~s with inequivalent args",
+                                       [rabbit_misc:rs(Name)])
+    end.
+
+assert_args_equivalence(X, Args) ->
+    ok = check_one_arg(X, Args, <<"type">>),
+    ok = check_one_arg(X, Args, <<"definition">>),
+    ok = check_one_arg(X, Args, <<"signature">>),
+    rabbit_exchange:assert_args_equivalence(X, Args).
