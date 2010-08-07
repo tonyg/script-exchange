@@ -197,7 +197,7 @@ publish(Exchange = #exchange{name = Name},
     #content{
          properties = Properties,
          payload_fragments_rev = PayloadRev
-        } = rabbit_binary_parser:ensure_content_decoded(Content0),
+        } = rabbit_binary_parser:ensure_content_decoded(Content0, rabbit_framing_amqp_0_9_1),
     case script_instance_manager:call(
            script_manager_pid(Exchange), <<"Exchange">>, <<"publish">>,
            [name_to_js(Name),
