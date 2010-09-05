@@ -1,6 +1,6 @@
 {application, rabbit_script_exchange,
  [{description, "RabbitMQ Script Exchange Plugin"},
-  {vsn, "0.01"},
+  {vsn, "%%VSN%%"},
   {modules, [script_exchange,
              script_instance,
              script_instance_manager,
